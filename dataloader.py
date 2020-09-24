@@ -19,11 +19,18 @@ class CustomDataset(torch.utils.data.Dataset):
         return len(self.data_y)
 
 
-def create_loaders(train_x_path, train_y_path, test_x_path, test_y_path, batch_size, val_frac=0.15):
-    data_x_train = torch.from_numpy(np.load(train_x_path).swapaxes(-1, -2)).float()
+def create_loaders(train_x_path, train_y_path, test_x_path, test_y_path, batch_size, val_frac=0.15, channel_norm=True):
+    data_x_train = torch.from_numpy(np.load(train_x_path).swapaxes(0, 1).swapaxes(1, 2)).float()
     data_x_test = torch.from_numpy(np.load(test_x_path).swapaxes(-1, -2)).float()
-    data_y_train = torch.from_numpy(np.load(train_y_path)).long()
-    data_y_test = torch.from_numpy(np.load(test_y_path)).long()
+    data_y_train = torch.argmax(torch.from_numpy(np.load(train_y_path)).long(), dim=1).long()
+    data_y_test = torch.argmax(torch.from_numpy(np.load(test_y_path)).long(), dim=1).long()
+
+    if channel_norm:
+        channel_mean = torch.mean(data_x_train, dim=[0, 2]).view(1, data_x_train.shape[1], 1)
+        channel_std = torch.std(data_x_train, dim=[0,2]).view(1, data_x_train.shape[1], 1)
+
+        data_x_train = (data_x_train - channel_mean) / channel_std
+        data_x_test  = (data_x_test - channel_mean) / channel_std
 
     train_dataset = CustomDataset(data_x_train, data_y_train)
     test_dataset = CustomDataset(data_x_test, data_y_test)

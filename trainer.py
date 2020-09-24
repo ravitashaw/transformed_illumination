@@ -1,9 +1,10 @@
 from utils import AverageMeter
 import torch
 from torch import nn
-import torch.nn.functional as F
+import numpy as np
 from tqdm import tqdm
 import wandb
+import matplotlib.pyplot as plt
 
 
 class Trainer:
@@ -21,11 +22,18 @@ class Trainer:
         self.decision_loss = nn.CrossEntropyLoss(reduction='none')
         self.use_gpu = self.model.device == 'cuda'
 
+    @staticmethod
+    def make_wandb_images(image_sequence):
+        normalized = plt.Normalize()
+        norm = lambda im: (im - np.min(im)) / (np.max(im) - np.min(im))
+        return [wandb.Image(plt.cm.viridis(normalized(norm(sample_image))), caption=f"Shot {j}") for j, sample_image in
+                enumerate(image_sequence)]
+
     def train(self):
         for self.curr_epoch in range(self.num_epochs):
             # TODO: add num_glimpses
-            train_loss, train_acc, sample_images = self.run_one_epoch(self.train_loader, True)
-            val_loss, val_acc, sample_images = self.run_one_epoch(self.val_loader, False)
+            train_loss, train_acc, sample_images_train = self.run_one_epoch(self.train_loader, True)
+            val_loss, val_acc, sample_images_val = self.run_one_epoch(self.val_loader, False)
             metrics = {
                 'train_loss': train_loss,
                 'train_acc': train_acc,
@@ -40,13 +48,16 @@ class Trainer:
                 })
             # TODO: add wandb support
             print(self.curr_epoch, metrics)
-            illuminated_images = [wandb.Image(sample_image, caption=f"Shot {j}") for j, sample_image in
-                                  enumerate(sample_images)]
-            wandb.log({"illumination_traj": illuminated_images}, step=self.curr_epoch)
+            illuminated_images_train = self.make_wandb_images(sample_images_train)
+            illuminated_images_val = self.make_wandb_images(sample_images_val)
+            wandb.log({"illumination_traj_train": illuminated_images_train}, step=self.curr_epoch)
+            wandb.log({"illumination_traj_val": illuminated_images_val}, step=self.curr_epoch)
+            wandb.log(metrics, step=self.curr_epoch)
 
     def run_one_epoch(self, loader, training):
         losses = AverageMeter()
         accs = AverageMeter()
+        ss = None
         if training:
             self.model.train()
         else:
@@ -70,7 +81,9 @@ class Trainer:
                 accs.update(acc_data)
                 pbar.update(1)
                 pbar.set_description(desc=f"loss: {losses.avg:.3f} acc: {accs.avg:.3f}")
-        return losses.avg, accs.avg, sample_images
+                if ss is None:
+                    ss = sample_images
+        return losses.avg, accs.avg, ss
 
     def rollout(self, x_data, y_data):
         phi = None

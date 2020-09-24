@@ -1,4 +1,4 @@
-from dataloader import get_fashion_loaders
+from dataloader import get_fashion_loaders, get_mnist_loaders
 from model import TransformedIlluminator, RecurrentIlluminator
 from trainer import Trainer
 from torch.optim import Adam
@@ -7,13 +7,13 @@ import wandb
 
 def main():
     wandb.init('adaptive_imager')
-    train_loader, val_loader, test_loader, channels, classes = get_fashion_loaders(batch_size=64)
+    train_loader, val_loader, test_loader, channels, classes = get_mnist_loaders(batch_size=128)
     model = TransformedIlluminator(num_leds=channels, num_classes=classes)
     # model = RecurrentIlluminator(num_leds=channels, num_classes=classes)
     model.cuda()
     optimizer = Adam(model.parameters())
-    trainer = Trainer(model=model, optimizer=optimizer, num_epochs=25, train_loader=train_loader, val_loader=val_loader,
-                      test_loader=test_loader, max_trajectory_length=3)
+    trainer = Trainer(model=model, optimizer=optimizer, num_epochs=100, train_loader=train_loader, val_loader=val_loader,
+                      test_loader=test_loader, max_trajectory_length=2)
 
     trainer.train()
 

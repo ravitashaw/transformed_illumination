@@ -12,21 +12,22 @@ class PhysicalDecoder(nn.Module):
         super().__init__()
         self.num_leds = num_leds
         self.d_model = d_model
-        self.std = 0.05
+        self.std = 0.0
 
         self.model = nn.Sequential(
             nn.Linear(in_features=d_model, out_features=32),
             nn.ReLU(),
-            nn.Linear(in_features=32, out_features=num_leds)
+            # nn.BatchNorm1d(32),
+            nn.Linear(in_features=32, out_features=num_leds),
             # nn.ReLU()
         )
 
     def forward(self, x):
         mu = self.model(x)
-        return mu
-        # noise = torch.randn_like(mu) * self.std
-        # new_phi = torch.sigmoid(mu + noise)
-        # return new_phi
+        # return mu
+        noise = torch.randn_like(mu) * self.std
+        new_phi = torch.sigmoid(mu + noise)
+        return new_phi
 
 
 class DecisionDecoder(nn.Module):

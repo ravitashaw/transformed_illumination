@@ -19,6 +19,10 @@ class TransformerEmbed(nn.Module):
                                                      dim_feedforward=feedforward_dim),
             num_layers=num_layers,
         )
+        self.encoder_ff = nn.Sequential(
+            nn.Linear(d_model, d_model),
+            nn.ReLU()
+        )
         self.reduction = reduction
 
     def forward(self, x):
@@ -32,6 +36,9 @@ class TransformerEmbed(nn.Module):
         if self.reduction == 'mean':
             # avg across all images
             output = torch.mean(output_embeddings, dim=1)
+        elif self.reduction == 'last':
+            output = output_embeddings[:, -1, :]
         else:
             output = torch.sum(output_embeddings, dim=1)
+        # output = self.encoder_ff(output)
         return output

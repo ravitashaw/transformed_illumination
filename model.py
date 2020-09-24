@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 
 from modules.image_processing import ImageEncoder
-from modules.physical_layers import Illumination
+from modules.physical_layers import Illumination, FixedIllumination
 from modules.transformers import TransformerEmbed
 from modules.decoders import ClassificationDecoder, PhysicalDecoder, DecisionDecoder
 
@@ -13,12 +13,14 @@ class TransformedIlluminator(nn.Module):
         super().__init__()
         self.device = 'cpu'
         self.num_leds = num_leds
+        self.counter = 0
         self.illuminator = Illumination()
-        d_model += num_leds % 2
+        # self.illuminator = FixedIllumination()
+        # d_model += num_leds % 2
         self.image_encoder = ImageEncoder(image_size=image_size, mlp_size=d_model, channels_in=1)
-        d_model += num_leds
-        self.transformer = TransformerEmbed(num_heads=num_heads, d_model=d_model, num_layers=2,
-                                            feedforward_dim=d_model)
+        # d_model += num_leds
+        self.transformer = TransformerEmbed(num_heads=num_heads, d_model=d_model, num_layers=4,
+                                            feedforward_dim=d_model, reduction='mean')
         self.decision_decoder = DecisionDecoder(d_model=d_model)
         self.physical_decoder = PhysicalDecoder(d_model=d_model, num_leds=num_leds)
         self.classification_decoder = ClassificationDecoder(d_model=d_model, num_classes=num_classes)
@@ -26,10 +28,12 @@ class TransformedIlluminator(nn.Module):
     def forward(self, x, phi, zs=None):
         # x is a single image, phi is an illumination pattern, zs is the previous encodings
         image, phi = self.illuminator(x, phi)
+        # image, phi = self.illuminator(x, self.counter)
         enc = self.image_encoder(image)
-        z = torch.cat([enc, phi], dim=-1)
+        z = enc
+        # z = torch.cat([enc, phi], dim=-1)
         if zs is not None:
-            embeddings = torch.cat([z, zs], dim=1)
+            embeddings = torch.cat([zs, z], dim=1)
         else:
             embeddings = z
         output_embedding = self.transformer(embeddings)
@@ -37,6 +41,8 @@ class TransformedIlluminator(nn.Module):
         # check decision
         classification = self.classification_decoder(output_embedding)
         new_phi = self.physical_decoder(output_embedding)
+        self.counter += 1
+        self.counter = self.counter % 3
         return decision, classification, new_phi, embeddings, image
 
     def cuda(self, **kwargs):
@@ -67,8 +73,8 @@ class RecurrentIlluminator(nn.Module):
         self.num_leds = num_leds
         self.illuminator = Illumination()
         self.image_encoder = ImageEncoder(image_size=image_size, mlp_size=d_model, channels_in=1)
-        d_model += num_leds % 2
-        d_model += num_leds
+        # d_model += num_leds % 2
+        # d_model += num_leds
         self.rnn = nn.RNNCell(d_model, d_model)
         self.decision_decoder = DecisionDecoder(d_model=d_model)
         self.physical_decoder = PhysicalDecoder(d_model=d_model, num_leds=num_leds)
@@ -78,7 +84,8 @@ class RecurrentIlluminator(nn.Module):
         # x is a single image, phi is an illumination pattern, zs is the previous encodings
         image, phi = self.illuminator(x, phi)
         enc = self.image_encoder(image)
-        z = torch.cat([enc, phi], dim=-1)
+        # z = torch.cat([enc, phi], dim=-1)
+        z = enc
         new_hidden_state = self.rnn(z.squeeze(), h)
         decision = self.decision_decoder(new_hidden_state)
         # check decision
