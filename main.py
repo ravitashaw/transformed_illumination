@@ -7,7 +7,7 @@ import wandb
 
 def main():
     wandb.init('adaptive_imager')
-    train_loader, val_loader, test_loader, channels, classes = get_mnist_loaders(batch_size=128)
+    train_loader, val_loader, test_loader, channels, classes = get_fashion_loaders(batch_size=128)
     model = TransformedIlluminator(num_leds=channels, num_classes=classes)
     # model = RecurrentIlluminator(num_leds=channels, num_classes=classes)
     model.cuda()
