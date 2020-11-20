@@ -20,7 +20,7 @@ class Trainer:
         self.max_trajectory_length = max_trajectory_length
         self.classifier_loss = nn.CrossEntropyLoss()
         self.decision_loss = nn.CrossEntropyLoss(reduction='none')
-        self.use_gpu = self.model.device == 'cuda'
+        self.use_gpu = False #self.model.device == 'cuda'
 
     @staticmethod
     def make_wandb_images(image_sequence):

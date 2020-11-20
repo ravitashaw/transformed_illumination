@@ -14,7 +14,7 @@ class TransformedIlluminator(nn.Module):
         self.device = 'cpu'
         self.num_leds = num_leds
         self.counter = 0
-        self.illuminator = Illumination()
+        self.illuminator = Illumination(num_leds=num_leds)
         # self.illuminator = FixedIllumination()
         # d_model += num_leds % 2
         self.image_encoder = ImageEncoder(image_size=image_size, mlp_size=d_model, channels_in=1)
