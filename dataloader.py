@@ -20,16 +20,34 @@ class CustomDataset(torch.utils.data.Dataset):
 
 
 def create_loaders(train_x_path, train_y_path, test_x_path, test_y_path, batch_size, val_frac=0.15, channel_norm=True):
-    data_x_train = torch.from_numpy(np.load(train_x_path).swapaxes(0, 1).swapaxes(1, 2)).float()
+    data_x_train = torch.from_numpy(np.load(train_x_path).swapaxes(-1, -2)).float()
     data_x_test = torch.from_numpy(np.load(test_x_path).swapaxes(-1, -2)).float()
-    data_y_train = torch.argmax(torch.from_numpy(np.load(train_y_path)).long(), dim=1).long()
-    data_y_test = torch.argmax(torch.from_numpy(np.load(test_y_path)).long(), dim=1).long()
 
+    data_y_train = torch.from_numpy(np.load(train_y_path)).long()
+    data_y_test = torch.from_numpy(np.load(test_y_path)).long()
+
+    if len(data_y_train.shape) > 1:
+        data_y_train = torch.argmax(data_y_train, axis=-1)
+        data_y_test = torch.argmax(data_y_test, axis=-1)
+
+    print('data_x_train Shape', data_x_train.shape)
+    print('data_x_test Shape', data_x_test.shape)
+    print('After')
     # subset the training data for testing
     data_x_train = data_x_train[:5000, :, :]
     data_y_train = data_y_train[:5000]
     data_x_test = data_x_test[:1000, :, :]
     data_y_test = data_y_test[:1000]
+
+    print('data_x_train Shape', data_x_train.shape)
+    print('data_x_test Shape', data_x_test.shape)
+
+    #torch.Size([784, 25, 60000])
+    #torch.Size([10000, 25, 784])
+    #After
+    #torch.Size([784, 25, 60000])
+    #torch.Size([1000, 25, 784])
+
 
     if channel_norm:
         channel_mean = torch.mean(data_x_train, dim=[0, 2]).view(1, data_x_train.shape[1], 1)
@@ -78,7 +96,7 @@ def get_mnist_loaders(batch_size):
 
 
 def get_fashion_loaders(batch_size):
-    base_path = '../git/optics/'
+    base_path = '/Users/ravy/Desktop/git/optics/'
     test_image_path = os.path.join(base_path, "fashion_test_norm.npy")
     test_label_path = os.path.join(base_path, "fashion_test_labels.npy")
     train_image_path = os.path.join(base_path, "fashion_train_norm.npy")
@@ -100,6 +118,7 @@ def get_malaria_loaders(batch_size):
 
     channels = 29
     classes = 2
+    print('Malaria Shape', np.load(malaria_image_path).shape)
 
     data_y = torch.from_numpy(np.load(malaria_label_path)).long()
     data_x = torch.from_numpy(np.load(malaria_image_path)).reshape((-1, 28, 28, 96)).float()
@@ -107,7 +126,7 @@ def get_malaria_loaders(batch_size):
                         data_x[:, :, :, 43:51], data_x[:, :, :, 52:64], data_x[:, :, :, 65:74], data_x[:, :, :, 75:83],
                         data_x[:, :, :, 84:]], axis=-1)
     print(data_x.shape)
-    data_x = data_x[:, :, :, 29:29 * 2]
+    #data_x = data_x[:, :, :, 29:29 * 2]
 
     num_train = data_x.shape[0]
     indices = list(range(num_train))

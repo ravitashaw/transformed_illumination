@@ -8,7 +8,7 @@ import wandb
 def main():
     wandb.init('adaptive_imager')
     train_loader, val_loader, test_loader, channels, classes = get_malaria_loaders(batch_size=128)
-    model = TransformedIlluminator(num_leds=channels, num_classes=classes)
+    model = TransformedIlluminator(num_leds=channels, num_classes=classes, std=0.17)
     # model = RecurrentIlluminator(num_leds=channels, num_classes=classes)
     #model.cuda()
     optimizer = Adam(model.parameters())

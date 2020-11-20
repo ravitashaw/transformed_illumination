@@ -9,7 +9,7 @@ from modules.decoders import ClassificationDecoder, PhysicalDecoder, DecisionDec
 
 class TransformedIlluminator(nn.Module):
 
-    def __init__(self, d_model=64, num_leds=25, image_size=28, num_heads=2, num_classes=None):
+    def __init__(self, d_model=64, num_leds=25, image_size=28, num_heads=2, num_classes=None, std=0.17):
         super().__init__()
         self.device = 'cpu'
         self.num_leds = num_leds
@@ -22,7 +22,7 @@ class TransformedIlluminator(nn.Module):
         self.transformer = TransformerEmbed(num_heads=num_heads, d_model=d_model, num_layers=4,
                                             feedforward_dim=d_model, reduction='mean')
         self.decision_decoder = DecisionDecoder(d_model=d_model)
-        self.physical_decoder = PhysicalDecoder(d_model=d_model, num_leds=num_leds)
+        self.physical_decoder = PhysicalDecoder(d_model=d_model, num_leds=num_leds, std=std)
         self.classification_decoder = ClassificationDecoder(d_model=d_model, num_classes=num_classes)
 
     def forward(self, x, phi, zs=None):
