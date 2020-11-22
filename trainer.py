@@ -32,8 +32,8 @@ class Trainer:
     def train(self):
         for self.curr_epoch in range(self.num_epochs):
             # TODO: add num_glimpses
-            train_loss, train_acc, sample_images_train = self.run_one_epoch(self.train_loader, True)
-            val_loss, val_acc, sample_images_val = self.run_one_epoch(self.val_loader, False)
+            train_loss, train_acc, sample_images_train, sample_phi_train = self.run_one_epoch(self.train_loader, True)
+            val_loss, val_acc, sample_images_val, sample_phi_test = self.run_one_epoch(self.val_loader, False)
             metrics = {
                 'train_loss': train_loss,
                 'train_acc': train_acc,
@@ -47,11 +47,12 @@ class Trainer:
                     'test_acc': test_acc
                 })
             # TODO: add wandb support
-            print(self.curr_epoch, metrics)
             illuminated_images_train = self.make_wandb_images(sample_images_train)
             illuminated_images_val = self.make_wandb_images(sample_images_val)
+            sample_phi_train_ph = self.make_wandb_images(sample_phi_train)
             wandb.log({"illumination_traj_train": illuminated_images_train}, step=self.curr_epoch)
             wandb.log({"illumination_traj_val": illuminated_images_val}, step=self.curr_epoch)
+            wandb.log({"sample_phi_train_ph": sample_phi_train_ph}, step=self.curr_epoch)
             wandb.log(metrics, step=self.curr_epoch)
 
     def run_one_epoch(self, loader, training):
@@ -69,12 +70,12 @@ class Trainer:
                     x, y = x.cuda(), y.cuda()
                 if training:
                     self.optimizer.zero_grad()
-                    loss, acc, sample_images = self.rollout(x, y)
+                    loss, acc, sample_images, sample_phi = self.rollout(x, y)
                     loss.backward()
                     self.optimizer.step()
                 else:
                     with torch.no_grad():
-                        loss, acc, sample_images = self.rollout(x, y)
+                        loss, acc, sample_images, sample_phi = self.rollout(x, y)
                 loss_data = float(loss.data)
                 acc_data = float(acc)
                 losses.update(loss_data)
@@ -83,7 +84,7 @@ class Trainer:
                 pbar.set_description(desc=f"loss: {losses.avg:.3f} acc: {accs.avg:.3f}")
                 if ss is None:
                     ss = sample_images
-        return losses.avg, accs.avg, ss
+        return losses.avg, accs.avg, ss, sample_phi
 
     def rollout(self, x_data, y_data):
         phi = None
@@ -96,10 +97,14 @@ class Trainer:
         timeouts = [False] * batch_size
         glimpses = [0] * batch_size
         sample_images = []
+        sample_phi = []
         # do rollout
         for i in range(self.max_trajectory_length):
             decisions, classifications, phi, zs, image = self.model(x_data, phi, zs)
+
             sample_images.append(image[0, 0].detach().cpu().numpy())
+            sample_phi.append(phi[0, :].detach().cpu().numpy())
+
             for b in range(batch_size):
                 if final_decisions[b] is not None:
                     continue
@@ -145,4 +150,4 @@ class Trainer:
         total_loss = classification_loss
         acc = correct_classification.sum() / len(y_data)
 
-        return total_loss, acc, sample_images
+        return total_loss, acc, sample_images, sample_phi

@@ -27,8 +27,8 @@ class TransformedIlluminator(nn.Module):
 
     def forward(self, x, phi, zs=None):
         # x is a single image, phi is an illumination pattern, zs is the previous encodings
+        # image, phi = self.illuminator(x, phi)
         image, phi = self.illuminator(x, phi)
-        # image, phi = self.illuminator(x, self.counter)
         enc = self.image_encoder(image)
         z = enc
         # z = torch.cat([enc, phi], dim=-1)
@@ -67,17 +67,17 @@ class TransformedIlluminator(nn.Module):
 
 class RecurrentIlluminator(nn.Module):
 
-    def __init__(self, d_model=64, num_leds=25, image_size=28, num_heads=2, num_classes=None):
+    def __init__(self, d_model=64, num_leds=25, image_size=28, num_heads=2, num_classes=None, std=0.17):
         super().__init__()
         self.device = 'cpu'
         self.num_leds = num_leds
-        self.illuminator = Illumination()
+        self.illuminator = Illumination(num_leds=num_leds)
         self.image_encoder = ImageEncoder(image_size=image_size, mlp_size=d_model, channels_in=1)
         # d_model += num_leds % 2
         # d_model += num_leds
         self.rnn = nn.RNNCell(d_model, d_model)
         self.decision_decoder = DecisionDecoder(d_model=d_model)
-        self.physical_decoder = PhysicalDecoder(d_model=d_model, num_leds=num_leds)
+        self.physical_decoder = PhysicalDecoder(d_model=d_model, num_leds=num_leds, std=std)
         self.classification_decoder = ClassificationDecoder(d_model=d_model, num_classes=num_classes)
 
     def forward(self, x, phi, h=None):
