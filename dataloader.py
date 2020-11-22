@@ -23,7 +23,7 @@ def create_loaders(train_x, train_y, test_x, test_y, batch_size, val_frac=0.15):
 
     np.random.seed(0)
 
-    # subetting for testing pipeline
+    # Sub setting for testing pipeline
     data_x_train = train_x[:5000, :, :]
     data_y_train = train_y[:5000]
     data_x_test = test_x[:1000, :, :]

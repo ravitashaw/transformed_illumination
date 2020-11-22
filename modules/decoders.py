@@ -26,7 +26,13 @@ class PhysicalDecoder(nn.Module):
         mu = self.model(x)
         noise = torch.randn_like(mu) * self.std
         new_phi = torch.sigmoid(mu + noise)
-        return new_phi
+
+        log_pi = torch.distributions.Normal(mu, self.std).log_prob(new_phi)
+        log_pi = torch.sum(log_pi, dim=1)
+        # bound between [-1, 1]
+        new_phi = torch.tanh(new_phi)
+
+        return new_phi, log_pi
 
 
 class DecisionDecoder(nn.Module):

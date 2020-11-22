@@ -32,13 +32,15 @@ class Trainer:
     def train(self):
         for self.curr_epoch in range(self.num_epochs):
             # TODO: add num_glimpses
-            train_loss, train_acc, sample_images_train, sample_phi_train = self.run_one_epoch(self.train_loader, True)
-            val_loss, val_acc, sample_images_val, sample_phi_test = self.run_one_epoch(self.val_loader, False)
+            train_loss, train_acc, sample_images_train, sample_phi_train, train_traj  = self.run_one_epoch(self.train_loader, True)
+            val_loss, val_acc, sample_images_val, sample_phi_val, val_traj = self.run_one_epoch(self.val_loader, False)
             metrics = {
                 'train_loss': train_loss,
                 'train_acc': train_acc,
                 'val_loss': val_loss,
-                'val_acc': val_acc
+                'val_acc': val_acc,
+                'train_traj': train_traj,
+                'val_traj': val_traj
             }
             if self.test_loader is not None:
                 test_loss, test_acc = self.run_one_epoch(self.test_loader, False)
@@ -50,18 +52,24 @@ class Trainer:
             illuminated_images_train = self.make_wandb_images(sample_images_train)
             illuminated_images_val = self.make_wandb_images(sample_images_val)
             sample_phi_train_ph = self.make_wandb_images(sample_phi_train)
+            sample_phi_val_ph = self.make_wandb_images(sample_phi_val)
             wandb.log({"illumination_traj_train": illuminated_images_train}, step=self.curr_epoch)
             wandb.log({"illumination_traj_val": illuminated_images_val}, step=self.curr_epoch)
             wandb.log({"sample_phi_train_ph": sample_phi_train_ph}, step=self.curr_epoch)
+            wandb.log({"sample_phi_val_ph": sample_phi_val_ph}, step=self.curr_epoch)
             wandb.log(metrics, step=self.curr_epoch)
 
     def run_one_epoch(self, loader, training):
         losses = AverageMeter()
         accs = AverageMeter()
+        trajs = AverageMeter()
+
         ss = None
+        keyword = 'Training'
         if training:
             self.model.train()
         else:
+            keyword = 'Validation'
             self.model.eval()
         with tqdm(total=len(loader)) as pbar:
             for i, data in enumerate(loader):
@@ -70,84 +78,147 @@ class Trainer:
                     x, y = x.cuda(), y.cuda()
                 if training:
                     self.optimizer.zero_grad()
-                    loss, acc, sample_images, sample_phi = self.rollout(x, y)
+                    loss, acc, sample_images, sample_phi, traj = self.rollout(x, y, adaptive_trajectory=False)
                     loss.backward()
                     self.optimizer.step()
                 else:
                     with torch.no_grad():
-                        loss, acc, sample_images, sample_phi = self.rollout(x, y)
+                        loss, acc, sample_images, sample_phi, traj = self.rollout(x, y, adaptive_trajectory=False)
                 loss_data = float(loss.data)
                 acc_data = float(acc)
+                traj_data = float(traj)
                 losses.update(loss_data)
                 accs.update(acc_data)
+                trajs.update(traj_data)
                 pbar.update(1)
-                pbar.set_description(desc=f"loss: {losses.avg:.3f} acc: {accs.avg:.3f}")
+                pbar.set_description(desc=f"{keyword} loss: {losses.avg:.3f} acc: {accs.avg:.3f} traj: {trajs.avg:.3f}")
                 if ss is None:
                     ss = sample_images
-        return losses.avg, accs.avg, ss, sample_phi
+        return losses.avg, accs.avg, ss, sample_phi, trajs.avg
 
-    def rollout(self, x_data, y_data):
-        phi = None
-        zs = None
+    def rollout(self, x_data, y_data, adaptive_trajectory=False):
+
         batch_size = x_data.shape[0]
-        final_classifications = [None] * batch_size
-        final_decisions = [None] * batch_size
-        early_exit = False
-        trajectories = [-1] * batch_size
-        timeouts = [False] * batch_size
-        glimpses = [0] * batch_size
+        phi = None  # led pattern Updated for each image
+        zs = None  # next hidden state/embedding
+        glimpse_number = 0
         sample_images = []
         sample_phi = []
-        # do rollout
-        for i in range(self.max_trajectory_length):
-            decisions, classifications, phi, zs, image = self.model(x_data, phi, zs)
 
-            sample_images.append(image[0, 0].detach().cpu().numpy())
-            sample_phi.append(phi[0, :].detach().cpu().numpy())
+        final_classifications = [None] * batch_size  # Final Classification Probs between the classes
+        final_decisions = [None] * batch_size  # Decision Probs if can classify or require phi
+        done_indices = [-1] * batch_size  # Number of Glimpses
+        timeouts = [False] * batch_size  # All Glimpses are finished and still no decision to classify
+        glimpses = [0] * batch_size  # Number of glimpses for each image to decision and classify - trajectory length
+        log_pis = []
 
-            for b in range(batch_size):
-                if final_decisions[b] is not None:
-                    continue
-                else:
-                    if torch.argmax(decisions[b]) == 1:
-                        final_decisions[b] = decisions[b]
-                        # final_classifications[b] = classifications[b]
-                        trajectories[b] = i
-            # if all([decision is not None for decision in final_decisions]):
-            #     early_exit = True
-            #     break
-        if not early_exit:
-            for j in range(batch_size):
-                if final_classifications[j] is None:
-                    final_decisions[j] = decisions[j]
-                    final_classifications[j] = classifications[j]
-                    timeouts[j] = True
-                    trajectories[j] = self.max_trajectory_length
-        final_classifications = torch.stack(final_classifications, dim=0)
-        final_decisions = torch.stack(final_decisions, dim=0)
+        # iterate through each of the trajectory
+        for t in range(self.max_trajectory_length):
+            glimpse_number += 1
+            decisions, classifications, phi, zs, image, p = self.model(x_data, phi, zs)
+            log_pis.append(p)
+
+            # for each image in the batch
+            for b_idx in range(batch_size):
+                # check if glimpse already classified
+                if done_indices[b_idx] > -1:
+                    continue;
+                # else if not done, check if decision is good for classification now
+                elif torch.argmax(decisions[b_idx]) == 1:
+                    # update the tracker with current glimpse
+                    glimpses[b_idx] = t + 1
+                    # mark it as done
+                    done_indices[b_idx] = 1
+                    # save Final Classification Probability
+                    final_classifications[b_idx] = classifications[b_idx]
+                    # save Final Decision Probability
+                    final_decisions[b_idx] = decisions[b_idx]
+                # else if decision is not good and the glimpses are timing out
+                elif t == self.max_trajectory_length-1:
+                    # update the current time out
+                    timeouts[b_idx] = True
+                    # update the tracker with current glimpse
+                    glimpses[b_idx] = t + 1
+                    # mark it as done
+                    done_indices[b_idx] = 1
+                    # save Final Classification Probability
+                    final_classifications[b_idx] = classifications[b_idx]
+                    # save Final Decision Probability
+                    final_decisions[b_idx] = decisions[b_idx]
+                # else go to next trajectory and make new decision (next iteration)
+                if b_idx == 0:
+                    sample_images.append(image[0, 0].detach().cpu().numpy())
+                    sample_phi.append(phi[0, :].detach().cpu().numpy())
+
+            # if all the images are classified before the max trajectory length has reached
+            # break the trajectory loop, this is the adaptive trajectory part
+            if all([done_index > -1 for done_index in done_indices]) and adaptive_trajectory:
+                break
+
+        # Classification Loss
+        final_classifications = torch.stack(final_classifications)
         classification_loss = self.classifier_loss(final_classifications, y_data)
-        # for the decision lets start with something simple, as in a "wrong classification" penalty and a "timeout"
-        # penalty
         correct_classification = (torch.argmax(final_classifications, dim=-1) == y_data).float()
-        decision_target = []
-        decision_scaling = []
+
+        # Decision Loss
+        final_decisions = torch.stack(final_decisions)
+        decision_target = []  # target for decision based upon timeout and correct classification
+        decision_scaling = [] # penalty scale for each case
+
+        # for each image
         for i in range(batch_size):
+            # if timed out, no decision was made, no classification happened (stay decision reward)
             if timeouts[i]:
                 decision_target.append(1)
-                decision_scaling.append(1.0)
+                decision_scaling.append(1.0 * glimpses[b_idx])
+            # if classification was correct (exit decision reward)
             elif correct_classification[i] == 1:
                 decision_target.append(1)
-                decision_scaling.append(1.0)
+                decision_scaling.append(0.01)
+            # if incorrect classification, penalize (wrong decision is same as stay decision reward)
             elif correct_classification[i] == 0:
                 decision_target.append(0)
-                decision_scaling.append(1.0)
+                decision_scaling.append(1.0 * glimpses[b_idx])
             else:
                 raise RuntimeError()
-        decision_target = torch.tensor(decision_target, device=final_classifications.device)
-        decision_scaling = torch.tensor(decision_scaling, device=final_classifications.device)
+
+        decision_target = torch.tensor(decision_target)
+        decision_scaling = torch.tensor(decision_scaling)
         decision_loss = (self.decision_loss(final_decisions, decision_target) * decision_scaling).mean()
-        # total_loss = classification_loss + decision_loss
-        total_loss = classification_loss
+
+        # average trajectory
+        trajs = torch.tensor(glimpses).float().mean()
+
+        loss = classification_loss + decision_loss
         acc = correct_classification.sum() / len(y_data)
 
-        return total_loss, acc, sample_images, sample_phi
+        return loss, acc, sample_images, sample_phi, trajs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
