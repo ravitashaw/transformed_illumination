@@ -16,23 +16,27 @@ class TransformerEmbed(nn.Module):
         self.encoder = nn.TransformerEncoder(
             encoder_layer=nn.TransformerEncoderLayer(d_model=d_model,
                                                      nhead=num_heads,
-                                                     dim_feedforward=feedforward_dim),
-            num_layers=num_layers,
-        )
-        self.encoder_ff = nn.Sequential(
-            nn.Linear(d_model, d_model),
-            nn.ReLU()
-        )
+                                                     dim_feedforward=feedforward_dim, activation='gelu'),
+            num_layers=num_layers)
+        self.decoder = nn.TransformerDecoder(
+            decoder_layer=nn.TransformerDecoderLayer(d_model=d_model,
+                                                     nhead=num_heads,
+                                                     dim_feedforward=feedforward_dim, activation='gelu'),
+            num_layers=num_layers)
         self.reduction = reduction
 
-    def forward(self, x):
+    def forward(self, x, prev_encoding):
         # x dim should be: B x I x Z
         # where: B = batch size
         #        I = number of images
         #        Z = dimensionality of embedded vector
         # output should be: B x H
         # where: H = hidden feedforward dim
+        if prev_encoding is None:
+            prev_encoding = torch.normal(size=x.shape, mean=1, std=0.2)
         output_embeddings = self.encoder(x)
+
+        output_embeddings = self.decoder(output_embeddings, prev_encoding)
         if self.reduction == 'mean':
             # avg across all images
             output = torch.mean(output_embeddings, dim=1)
@@ -40,5 +44,5 @@ class TransformerEmbed(nn.Module):
             output = output_embeddings[:, -1, :]
         else:
             output = torch.sum(output_embeddings, dim=1)
-        # output = self.encoder_ff(output)
+        output = torch.tanh(output)
         return output

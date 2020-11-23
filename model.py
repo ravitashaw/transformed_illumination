@@ -31,19 +31,14 @@ class TransformedIlluminator(nn.Module):
         image, phi = self.illuminator(x, phi)
         enc = self.image_encoder(image)
         z = enc
-        # z = torch.cat([enc, phi], dim=-1)
-        if zs is not None:
-            embeddings = torch.cat([zs, z], dim=1)
-        else:
-            embeddings = z
-        output_embedding = self.transformer(embeddings)
-        decision = self.decision_decoder(output_embedding)
+        output_embedding = self.transformer(z, zs)
         # check decision
+        decision = self.decision_decoder(output_embedding)
         classification = self.classification_decoder(output_embedding)
-        new_phi, log_pi = self.physical_decoder(output_embedding)
+        new_phi = self.physical_decoder(output_embedding)
         self.counter += 1
         self.counter = self.counter % 3
-        return decision, classification, new_phi, embeddings, image
+        return decision, classification, new_phi, z, image
 
     def cuda(self, **kwargs):
         self.device = 'cuda'
