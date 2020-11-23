@@ -29,6 +29,7 @@ class PhysicalDecoder(nn.Module):
 
         log_pi = torch.distributions.Normal(mu, self.std).log_prob(new_phi)
         log_pi = torch.sum(log_pi, dim=1)
+
         # bound between [-1, 1]
         new_phi = torch.tanh(new_phi)
 
@@ -65,3 +66,18 @@ class ClassificationDecoder(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+
+class BaselineDecoder(nn.Module):
+
+    def __init__(self, d_model):
+        super(BaselineDecoder, self).__init__()
+        self.d_model = d_model
+        self.model = nn.Sequential(
+            nn.Linear(in_features=d_model, out_features=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.model(x)
+

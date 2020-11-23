@@ -43,7 +43,7 @@ class TransformedIlluminator(nn.Module):
         new_phi, log_pi = self.physical_decoder(output_embedding)
         self.counter += 1
         self.counter = self.counter % 3
-        return decision, classification, new_phi, embeddings, image, log_pi
+        return decision, classification, new_phi, embeddings, image
 
     def cuda(self, **kwargs):
         self.device = 'cuda'
@@ -91,8 +91,7 @@ class RecurrentIlluminator(nn.Module):
         # check decision
         classification = self.classification_decoder(new_hidden_state)
         new_phi, log_pi = self.physical_decoder(new_hidden_state)
-        return decision, classification, new_phi, new_hidden_state, image, log_pi
-
+        return decision, classification, new_phi, new_hidden_state, image
 
     def cuda(self, **kwargs):
         self.device = 'cuda'

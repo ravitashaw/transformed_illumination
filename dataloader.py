@@ -177,11 +177,10 @@ def get_malaria_loaders(batch_size, channel_norm=True):
     print('Train + Test X Shape', malaria_x.shape)
     print('Train + Test Y Shape', malaria_y.shape)
 
+    malaria_x = malaria_x[:, 29:29*2, :, :]
+
     if channel_norm:
         malaria_x = apply_channel_norm(malaria_x)
-
-    # Use only 29 Channels
-    malaria_x = malaria_x[:, 29:29*2:, :, :]
 
     num_train = malaria_x.shape[0]
     indices = list(range(num_train))
