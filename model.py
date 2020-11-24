@@ -15,7 +15,7 @@ class TransformedIlluminator(nn.Module):
         self.num_leds = num_leds
         self.counter = 0
         self.illuminator = Illumination(num_leds=num_leds)
-        # self.illuminator = FixedIllumination()
+        #self.illuminator = FixedIllumination(num_leds=num_leds)
         # d_model += num_leds % 2
         self.image_encoder = ImageEncoder(image_size=image_size, mlp_size=d_model, channels_in=1)
         # d_model += num_leds
@@ -27,8 +27,8 @@ class TransformedIlluminator(nn.Module):
 
     def forward(self, x, phi, zs=None):
         # x is a single image, phi is an illumination pattern, zs is the previous encodings
-        # image, phi = self.illuminator(x, phi)
         image, phi = self.illuminator(x, phi)
+        # image, phi = self.illuminator(x, self.counter)
         enc = self.image_encoder(image)
         z = enc
         output_embedding = self.transformer(z, zs)
@@ -51,8 +51,8 @@ class TransformedIlluminator(nn.Module):
 
     def get_parameters(self):
         params = []
-        params += [self.first_illumination]
-        # params += list(self.illuminator.parameters())
+        # params += [self.first_illumination]
+        params += list(self.illuminator.parameters())
         params += list(self.transformer.parameters())
         params += list(self.decision_decoder.parameters())
         params += list(self.physical_decoder.parameters())

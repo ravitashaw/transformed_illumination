@@ -7,15 +7,15 @@ import wandb
 
 def main():
     wandb.init('adaptive_imager')
-    adaptive_trajectory = False
-    train_loader, val_loader, test_loader, channels, classes = get_malaria_loaders(batch_size=128)
+    adaptive_trajectory = True
+    train_loader, val_loader, test_loader, channels, classes, label_dict = get_fashion_loaders(batch_size=128)
     model = TransformedIlluminator(num_leds=channels, num_classes=classes, std=0.0)
     #model = RecurrentIlluminator(num_leds=channels, num_classes=classes, std=0.0)
     # model.cuda()
 
-    optimizer = Adam(model.parameters(), lr=0.0001)
-    trainer = Trainer(model=model, optimizer=optimizer, num_epochs=30, train_loader=train_loader, val_loader=val_loader,
-                      test_loader=test_loader, max_trajectory_length=8)
+    optimizer = Adam(model.get_parameters())
+    trainer = Trainer(model=model, optimizer=optimizer, num_epochs=35, train_loader=train_loader, val_loader=val_loader,
+                      test_loader=test_loader, max_trajectory_length=1, label_dict=label_dict)
     trainer.train(adaptive_trajectory=adaptive_trajectory)
 
 

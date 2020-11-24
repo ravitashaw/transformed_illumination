@@ -22,6 +22,7 @@ class Illumination(nn.Module):
         batch_size = images.shape[0]
         if channel_weights is not None:
             led_weights = channel_weights.view(-1, self.num_leds, 1, 1)
+            led_weights = torch.tanh(torch.square(led_weights))
             images_grouped = images.view(1, batch_size*self.num_leds, images.shape[2], images.shape[3])
             weights_grouped = led_weights.view(batch_size*1, self.num_leds, 1, 1)
             intermediate = F.conv2d(images_grouped, weights_grouped, groups=batch_size)

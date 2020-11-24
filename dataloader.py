@@ -19,15 +19,19 @@ class CustomDataset(torch.utils.data.Dataset):
         return len(self.data_y)
 
 
-def create_loaders(train_x, train_y, test_x, test_y, batch_size, val_frac=0.15):
+def create_loaders(train_x, train_y, test_x, test_y, batch_size, channel_norm, val_frac=0.15):
 
     np.random.seed(0)
 
     # Sub setting for testing pipeline
-    data_x_train = train_x[:5000, :, :]
-    data_y_train = train_y[:5000]
-    data_x_test = test_x[:1000, :, :]
-    data_y_test = test_y[:1000]
+    data_x_train = train_x[:8500, :, :]
+    data_y_train = train_y[:8500]
+    data_x_test = test_x[:1500, :, :]
+    data_y_test = test_y[:1500]
+
+    if channel_norm:
+        data_x_train = apply_channel_norm(data_x_train)
+        data_x_test = apply_channel_norm(data_x_test)
 
     train_dataset = CustomDataset(data_x_train, data_y_train)
     test_dataset = CustomDataset(data_x_test, data_y_test)
@@ -93,17 +97,16 @@ def get_mnist_loaders(batch_size, channel_norm=True):
     print('Train X Shape', mnist_x_train.shape, 'Y Shape', mnist_y_train.shape)
     print('Test X Shape', mnist_x_test.shape, 'Y Shape', mnist_y_test.shape)
 
-    if channel_norm:
-        mnist_x_train = apply_channel_norm(mnist_x_train)
-        mnist_x_test = apply_channel_norm(mnist_x_test)
-
     train_loader, val_loader, test_loader = create_loaders(train_x=mnist_x_train,
                                                            train_y=mnist_y_train,
                                                            test_x=mnist_x_test,
                                                            test_y=mnist_y_test,
-                                                           batch_size=batch_size)
+                                                           batch_size=batch_size,
+                                                           channel_norm=channel_norm)
 
-    return train_loader, val_loader, None, channels, classes
+    label_dictionary = dict(zip(range(10), range(10)))
+
+    return train_loader, val_loader, None, channels, classes, label_dictionary
 
 
 def get_fashion_loaders(batch_size, channel_norm=True):
@@ -135,17 +138,18 @@ def get_fashion_loaders(batch_size, channel_norm=True):
     print('Train X Shape', fashion_x_train.shape, 'Y Shape', fashion_y_train.shape)
     print('Test X Shape', fashion_x_test.shape, 'Y Shape', fashion_y_test.shape)
 
-    if channel_norm:
-        fashion_x_train = apply_channel_norm(fashion_x_train)
-        fashion_x_test = apply_channel_norm(fashion_x_test)
-
     train_loader, val_loader, test_loader = create_loaders(train_x=fashion_x_train,
                                                            train_y=fashion_y_train,
                                                            test_x=fashion_x_test,
                                                            test_y=fashion_y_test,
-                                                           batch_size=batch_size)
+                                                           batch_size=batch_size,
+                                                           channel_norm=channel_norm)
 
-    return train_loader, val_loader, None, channels, classes
+    label_dictionary = {0: "T-shirt/top", 1: "Trouser", 2: "Pullover", 3: "Dress",
+                        4: "Coat", 5: "Sandal", 6: "Shirt", 7: "Sneaker",
+                        8: "Bag", 9: "Ankle boot"}
+
+    return train_loader, val_loader, None, channels, classes, label_dictionary
 
 
 def get_malaria_loaders(batch_size, channel_norm=True):
@@ -201,5 +205,7 @@ def get_malaria_loaders(batch_size, channel_norm=True):
     val_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=batch_size, sampler=valid_sampler, )
 
-    return train_loader, val_loader, None, channels, classes
+    label_dictionary = {0: "Not Infected", 1: "Infected"}
+
+    return train_loader, val_loader, None, channels, classes, label_dictionary
 

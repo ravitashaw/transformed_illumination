@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 class Trainer:
 
     def __init__(self, model, optimizer, num_epochs, train_loader, val_loader, test_loader=None,
-                 max_trajectory_length=8):
+                 max_trajectory_length=8, label_dict=None):
         self.test_loader = test_loader
         self.val_loader = val_loader
         self.train_loader = train_loader
@@ -21,6 +21,7 @@ class Trainer:
         self.classifier_loss = nn.CrossEntropyLoss()
         self.decision_loss = nn.CrossEntropyLoss(reduction='none')
         self.use_gpu = False  # self.model.device == 'cuda'
+        self.label_dictionary = label_dict
 
     @staticmethod
     def make_wandb_images(image_sequence, title=""):
@@ -80,8 +81,11 @@ class Trainer:
                 pbar.update(1)
                 pbar.set_description(desc=f"Epoch {self.curr_epoch} {keyword} Loss: {losses.avg:.3f} Accuracy: {accs.avg:.3f} Avg Traj: {trajs.avg:.3f}")
 
-                title = f'Traj Length: {sample_traj_length}'
+                label = f'Label={self.label_dictionary[int(y[0])]}' if self.label_dictionary is not None else ""
+                title = f'T: {sample_traj_length} {label}'
                 illuminated_images = self.make_wandb_images(sample_images, title)
+                label = f'{sample_phi[0].shape}'
+                title = f'T: {sample_traj_length} {label}'
                 sample_phi_ph = self.make_wandb_images(sample_phi, title)
                 wandb.log({f"{keyword}_Images": illuminated_images}, step=self.curr_epoch)
                 wandb.log({f"{keyword}_Illunmination": sample_phi_ph}, step=self.curr_epoch)
@@ -101,6 +105,9 @@ class Trainer:
         sample_images = []
         sample_phi = []
         # do rollout
+
+        sample_images.append(x_data[0, 0].detach().cpu().numpy())
+
         for i in range(self.max_trajectory_length):
             decisions, classifications, phi, zs, image = self.model(x_data, phi, zs)
 
@@ -152,14 +159,14 @@ class Trainer:
         decision_scaling = torch.tensor(decision_scaling, device=final_classifications.device)
         decision_loss = (self.decision_loss(final_decisions, decision_target) * decision_scaling).mean()
         total_loss = classification_loss + decision_loss
-        # total_loss = classification_loss
+        total_loss = classification_loss
         acc = correct_classification.sum() / len(y_data)
 
         trajs = torch.tensor(trajectories).float().mean()
 
         return total_loss, acc, sample_images, sample_phi, trajs, trajectories[0]
 
-    def rollout1(self, x_data, y_data, adaptive_trajectory):
+    def rollout_adaptive_trajectory(self, x_data, y_data, adaptive_trajectory):
 
         batch_size = x_data.shape[0]
         phi = None  # led pattern Updated for each image
