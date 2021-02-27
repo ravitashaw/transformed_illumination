@@ -4,7 +4,7 @@ import torch
 
 class PhysicalDecoder(nn.Module):
 
-    def __init__(self, num_leds, d_model):
+    def __init__(self, num_leds, d_model, std):
         """
         Takes in an encoded state from transformer and outputs a physical parameterization for the physical layer
         num_l
@@ -12,7 +12,7 @@ class PhysicalDecoder(nn.Module):
         super().__init__()
         self.num_leds = num_leds
         self.d_model = d_model
-        self.std = 0.0
+        self.std = std
 
         self.model = nn.Sequential(
             nn.Linear(in_features=d_model, out_features=32),
@@ -24,9 +24,9 @@ class PhysicalDecoder(nn.Module):
 
     def forward(self, x):
         mu = self.model(x)
-        # return mu
         noise = torch.randn_like(mu) * self.std
         new_phi = torch.sigmoid(mu + noise)
+        new_phi = torch.tanh(new_phi)
         return new_phi
 
 
@@ -60,3 +60,18 @@ class ClassificationDecoder(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+
+class BaselineDecoder(nn.Module):
+
+    def __init__(self, d_model):
+        super(BaselineDecoder, self).__init__()
+        self.d_model = d_model
+        self.model = nn.Sequential(
+            nn.Linear(in_features=d_model, out_features=1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        return self.model(x)
+
